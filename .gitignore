@@ -1,0 +1,4 @@
+*.csv
+*.npy
+wandb
+__pycache__
