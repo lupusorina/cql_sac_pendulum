@@ -13,6 +13,8 @@ import minari
 import pandas as pd
 import ast
 from pendulum import PendulumEnv
+from matplotlib import pyplot as plt
+import os
 
 def get_config():
     parser = argparse.ArgumentParser(description='RL')
@@ -77,7 +79,7 @@ def prep_dataloader(env_id="halfcheetah-medium-v2", batch_size=256, seed=1):
                                tensors["terminals"][:, None])
     dataloader = DataLoader(tensordata, batch_size=batch_size, shuffle=True)
     
-    eval_env = PendulumEnv()
+    eval_env = PendulumEnv() # render_mode='human'
     return dataloader, eval_env
 
 def evaluate(env, policy, eval_runs=5): 
@@ -91,17 +93,21 @@ def evaluate(env, policy, eval_runs=5):
 
         rewards = 0
         counter = 0
+        EPISODE_DONE_ANGLE_THRESHOLD_DEG = 0.5
+        upright_angle_buffer = []
+        done = False
         while True:
             action = policy.get_action(state, eval=True)
-            state, reward, done, _, _ = env.step(action)
+            state, reward, _, _, _ = env.step(action)
+            rewards += reward
+            counter += 1
             cos_theta = state[0]
             sin_theta = state[1]
             theta = np.arctan2(sin_theta, cos_theta)
-            state_angle_angle_vel = np.array([theta, state[2]])
-            if abs(theta) < np.deg2rad(0.5) or counter > 500:
+            if abs(theta) < np.deg2rad(EPISODE_DONE_ANGLE_THRESHOLD_DEG):
+                upright_angle_buffer.append(theta)
+            if len(upright_angle_buffer) > 40 or counter > 500:
                 done = True
-            rewards += reward
-            counter += 1
             if done:
                 break
         reward_batch.append(rewards)
@@ -116,7 +122,6 @@ def train(config):
     torch.manual_seed(config.seed)
 
     dataloader, env = prep_dataloader(env_id=config.env, batch_size=config.batch_size, seed=config.seed)
-    print('env:', env)
     env.action_space.seed(config.seed)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -124,8 +129,6 @@ def train(config):
     
     batches = 0
     average10 = deque(maxlen=10)
-    print(env.observation_space.shape[0])
-    print(env.action_space.shape[0])
     with wandb.init(project="CQL-offline", name=config.run_name, config=config):
         
         agent = CQLSAC(state_size=env.observation_space.shape[0],
@@ -141,6 +144,7 @@ def train(config):
 
         wandb.watch(agent, log="gradients", log_freq=10)
         if config.log_video:
+            # TODO: this is not working
             env = gym.wrappers.Monitor(env, './video', video_callable=lambda x: x%10==0, force=True)
 
         eval_reward = evaluate(env, agent)
@@ -157,6 +161,25 @@ def train(config):
                 next_states = next_states.to(device)
                 dones = dones.to(device)
 
+                # # Create a plot with the states and actions:
+                # fig, ax = plt.subplots(4, 1, sharex=True, figsize=(8, 8))
+                # angle = np.arctan2(states[:, 1].detach().numpy(), states[:, 0].detach().numpy())
+                # ax[0].plot(angle, label='angle')
+                # ax[0].set_ylabel('angle')
+                # ax[0].legend()
+                # ax[1].plot(states[:, 2].detach().numpy(), label='angular velocity')
+                # ax[1].set_ylabel('angular velocity')
+                # ax[1].legend()
+                # ax[2].plot(actions[:, 0].detach().numpy(), label='action')
+                # ax[2].set_ylabel('action')
+                # ax[2].legend()
+                # ax[3].plot(rewards.detach().numpy(), label='reward')
+                # ax[3].set_ylabel('reward')
+                # ax[3].legend()
+                # plt.xlabel('time')
+                # plt.savefig(f'{PLOTS_FOLDER}/states_actions_{i}_{batch_idx}.png')
+                # plt.close(fig)
+
                 policy_loss, alpha_loss, bellmann_error1, bellmann_error2, \
                                 cql1_loss, cql2_loss, current_alpha, lagrange_alpha_loss, lagrange_alpha \
                                 = agent.learn((states, actions, rewards, next_states, dones))
@@ -167,7 +190,7 @@ def train(config):
                 wandb.log({"Test Reward": eval_reward, "Episode": i, "Batches": batches}, step=batches)
 
                 average10.append(eval_reward)
-                print("Episode: {} | Reward: {} | Polciy Loss: {} | Batches: {}".format(i, eval_reward, policy_loss, batches,))
+                print("Episode: {} | Reward: {} | Policy Loss: {} | Batches: {}".format(i, eval_reward, policy_loss, batches,))
             
             wandb.log({
                        "Average10": np.mean(average10),
@@ -183,14 +206,12 @@ def train(config):
                        "Batches": batches,
                        "Episode": i})
 
-            if (i %10 == 0) and config.log_video:
-                mp4list = glob.glob('video/*.mp4')
-                if len(mp4list) > 1:
-                    mp4 = mp4list[-2]
-                    wandb.log({"gameplays": wandb.Video(mp4, caption='episode: '+str(i-10), fps=4, format="gif"), "Episode": i})
-
             if i % config.save_every == 0:
                 save(config, save_name="IQL", model=agent.actor_local, wandb=wandb, ep=0)
+
+PLOTS_FOLDER = 'plots'
+if not os.path.exists(PLOTS_FOLDER):
+    os.makedirs(PLOTS_FOLDER)
 
 if __name__ == "__main__":
     config = get_config()
