@@ -5,7 +5,7 @@ import torch
 import wandb
 import argparse
 import glob
-from utils import save, collect_random
+from utils import save
 import random
 from agent import CQLSAC
 from torch.utils.data import DataLoader, TensorDataset
