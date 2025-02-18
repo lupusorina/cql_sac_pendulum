@@ -59,7 +59,7 @@ FOLDER_MODELS = 'trained_models'
 MODEL_NAME = 'CQL-SACCQL-DQN0'
 
 
-state_dict = torch.load(f'{FOLDER_MODELS}/{MODEL_NAME}.pth')
+state_dict = torch.load(f'{FOLDER_MODELS}/{MODEL_NAME}.pth', map_location=device)
 agent.actor_local.load_state_dict(state_dict)
 
 eval_reward = evaluate(eval_env, agent)
