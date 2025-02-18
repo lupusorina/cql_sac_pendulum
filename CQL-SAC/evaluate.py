@@ -38,8 +38,8 @@ config = get_config()
 np.random.seed(config.seed)
 random.seed(config.seed)
 torch.manual_seed(config.seed)
-env = gym.make(config.env)
-eval_env = gym.make(config.env)
+env = gym.make(config.env, render_mode="human")
+eval_env = gym.make(config.env, render_mode="human")
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
