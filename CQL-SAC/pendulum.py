@@ -87,7 +87,11 @@ class PendulumEnv():
             y = verify_number_and_cast(y)
             high = np.array([x, y])
         low = -high  # We enforce symmetric limits.
-        self.state = np.random.uniform(low=low, high=high)
+        angle_up_limits_deg = 18 # deg
+        angle_up_limits_rad = np.deg2rad(angle_up_limits_deg)
+        angular_velocity_limits = 0.0
+        self.state = np.random.uniform(low=[-angle_up_limits_rad, -angular_velocity_limits],
+                                       high=[angle_up_limits_rad, angular_velocity_limits])
         self.last_u = None
 
         if options is not None:
