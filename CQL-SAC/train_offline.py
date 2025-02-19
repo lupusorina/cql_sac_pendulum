@@ -30,7 +30,7 @@ def get_config():
     parser.add_argument("--target_action_gap", type=float, default=10, help="")
     parser.add_argument("--with_lagrange", type=int, default=0, help="")
     parser.add_argument("--tau", type=float, default=5e-3, help="")
-    parser.add_argument("--eval_every", type=int, default=1, help="")
+    parser.add_argument("--eval_run_duration", type=int, default=500, help="")
     
     args = parser.parse_args()
     return args
@@ -39,7 +39,7 @@ def prep_dataloader(env_id=None, batch_size=256, seed=1):
 
     DATASET_FOLDER = 'data'
     FILENAME = 'data_pendulum_5000.csv'
-    EXTRACT_DATA = False
+    EXTRACT_DATA = True
     df = pd.read_csv(f'{DATASET_FOLDER}/{FILENAME}')
 
     if EXTRACT_DATA == True: # This needs to be run once to extract the data from the csv file.
@@ -110,9 +110,11 @@ def train(config):
 
         wandb.watch(agent, log="gradients", log_freq=10)
 
-        eval_reward = evaluate(env, agent)
+        eval_reward, durations = evaluate(env, agent)
         wandb.log({"Test Reward": eval_reward, "Episode": 0, "Batches": batches}, step=batches)
         print("Episode: {} | Reward: {}".format(0, eval_reward))
+
+        counter_durations_under_threshold = 0 # Used for early stopping.
         for i in range(1, config.episodes+1):
             print('Episode i:', i)
 
@@ -129,13 +131,6 @@ def train(config):
                                 = agent.learn((states, actions, rewards, next_states, dones))
                 batches += 1
 
-            if i % config.eval_every == 0:
-                eval_reward = evaluate(env, agent, episode_nb=i)
-                wandb.log({"Test Reward": eval_reward, "Episode": i, "Batches": batches}, step=batches)
-
-                average10.append(eval_reward)
-                print("Episode: {} | Reward: {} | Policy Loss: {} | Batches: {}".format(i, eval_reward, policy_loss, batches,))
-            
             wandb.log({
                        "Average10": np.mean(average10),
                        "Policy Loss": policy_loss,
@@ -150,8 +145,22 @@ def train(config):
                        "Batches": batches,
                        "Episode": i})
 
-            if i % config.save_every == 0:
-                save(config, save_name="_Pendulum", model=agent.actor_local, wandb=wandb, ep=0)
+            eval_reward, durations = evaluate(env, agent, episode_nb=i, episode_duration=config.eval_run_duration, plots_folder=PLOTS_FOLDER)
+            wandb.log({"Test Reward": eval_reward, "Episode": i, "Batches": batches}, step=batches)
+            # Do early stopping if 3 durations in a row are below eval_run_duration
+            if all([duration < config.eval_run_duration for duration in durations]):
+                counter_durations_under_threshold += 1
+                print('Counter:', counter_durations_under_threshold)
+            else:
+                print('Reset counter')
+                counter_durations_under_threshold = 0
+
+            average10.append(eval_reward)
+            print("Episode: {} | Reward: {} | Policy Loss: {} | Batches: {}".format(i, eval_reward, policy_loss, batches,))
+
+            if i % config.save_every == 0 or counter_durations_under_threshold >= 3:
+                save(config, save_name="_Pendulum", model=agent.actor_local, wandb=wandb, ep=i)
+                break
 
 PLOTS_FOLDER = 'plots'
 if not os.path.exists(PLOTS_FOLDER):
