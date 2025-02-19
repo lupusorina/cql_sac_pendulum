@@ -1,3 +1,7 @@
+"""
+Code modified by Sorina from https://github.com/BY571/CQL
+"""
+
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
