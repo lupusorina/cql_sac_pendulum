@@ -45,7 +45,6 @@ class CQLSAC(nn.Module):
         self.clip_grad_param = 1
 
         self.target_entropy = -action_size  # -dim(A)
-        print(f"Target entropy: {self.target_entropy}")
 
         # self.log_alpha = torch.tensor([0.0], requires_grad=True)
         # self.alpha = self.log_alpha.exp().detach()
