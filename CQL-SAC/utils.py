@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import tqdm
 
 def save(args, save_name, model, wandb, ep=None):
     save_dir = './trained_models/' 
@@ -20,6 +21,7 @@ def evaluate(env, policy, eval_runs=5, episode_nb=0, plots_folder='plots'):
     """
     print('Evaluating')
     EPISODE_DONE_ANGLE_THRESHOLD_DEG = 0.5
+    EPISODE_DURATION = 1000
     reward_batch = []
     durations_episodes = []
     for i in range(eval_runs):
@@ -41,7 +43,7 @@ def evaluate(env, policy, eval_runs=5, episode_nb=0, plots_folder='plots'):
             theta = state_angle_angular_vel[0]
             if abs(state_angle_angular_vel[0]) < np.deg2rad(EPISODE_DONE_ANGLE_THRESHOLD_DEG):
                 upright_angle_buffer.append(theta)
-            if len(upright_angle_buffer) > 10 or counter > 500:
+            if len(upright_angle_buffer) > 10 or counter > EPISODE_DURATION:
                 done = True
             if done:
                 break
