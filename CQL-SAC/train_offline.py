@@ -39,7 +39,7 @@ def prep_dataloader(env_id=None, batch_size=256, seed=1):
 
     DATASET_FOLDER = 'data'
     FILENAME = 'data_pendulum_5000.csv'
-    EXTRACT_DATA = True
+    EXTRACT_DATA = False
     df = pd.read_csv(f'{DATASET_FOLDER}/{FILENAME}')
 
     if EXTRACT_DATA == True:
