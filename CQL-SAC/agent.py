@@ -45,10 +45,12 @@ class CQLSAC(nn.Module):
         self.clip_grad_param = 1
 
         self.target_entropy = -action_size  # -dim(A)
+        print(f"Target entropy: {self.target_entropy}")
 
-        self.log_alpha = torch.tensor([0.0], requires_grad=True)
-        self.alpha = self.log_alpha.exp().detach()
-        self.alpha_optimizer = optim.Adam(params=[self.log_alpha], lr=learning_rate) 
+        # self.log_alpha = torch.tensor([0.0], requires_grad=True)
+        # self.alpha = self.log_alpha.exp().detach()
+        # self.alpha_optimizer = optim.Adam(params=[self.log_alpha], lr=learning_rate)
+        self.alpha = 1.0
         
         # CQL params
         self.with_lagrange = with_lagrange
@@ -83,10 +85,10 @@ class CQLSAC(nn.Module):
     def get_action(self, state, eval=False):
         """Returns actions for given state as per current policy."""
         # check if it is a tuple
-        if isinstance(state, tuple):
-            state = torch.from_numpy(state[0]).float().to(self.device)
-        else:
-            state = torch.from_numpy(state).float().to(self.device)
+        # if isinstance(state, tuple):
+        #     state = torch.from_numpy(state[0]).float().to(self.device)
+        # else:
+        state = torch.from_numpy(state).float().to(self.device)
         
         with torch.no_grad():
             if eval:
@@ -140,13 +142,14 @@ class CQLSAC(nn.Module):
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
-        
+
+        alpha_loss = 0.0
         # Compute alpha loss
-        alpha_loss = - (self.log_alpha.exp() * (log_pis.cpu() + self.target_entropy).detach().cpu()).mean()
-        self.alpha_optimizer.zero_grad()
-        alpha_loss.backward()
-        self.alpha_optimizer.step()
-        self.alpha = self.log_alpha.exp().detach()
+        # alpha_loss = - (self.log_alpha.exp() * (log_pis.cpu() + self.target_entropy).detach().cpu()).mean()
+        # self.alpha_optimizer.zero_grad()
+        # alpha_loss.backward()
+        # self.alpha_optimizer.step()
+        # self.alpha = self.log_alpha.exp().detach()
 
         # ---------------------------- update critic ---------------------------- #
         # Get predicted next-state actions and Q values from target models
@@ -156,7 +159,7 @@ class CQLSAC(nn.Module):
             next_action, new_log_pi = self.actor_local.evaluate(next_states)
             Q_target1_next = self.critic1_target(next_states, next_action)
             Q_target2_next = self.critic2_target(next_states, next_action)
-            Q_target_next = torch.min(Q_target1_next, Q_target2_next) - self.alpha.to(self.device) * new_log_pi
+            Q_target_next = torch.min(Q_target1_next, Q_target2_next) - self.alpha * new_log_pi
             # Compute Q targets for current states (y_i)
             Q_targets = rewards + (self.gamma * (1 - dones) * Q_target_next) 
 
@@ -191,22 +194,23 @@ class CQLSAC(nn.Module):
         
         assert cat_q1.shape == (states.shape[0], 3 * num_repeat, 1), f"cat_q1 instead has shape: {cat_q1.shape}"
         assert cat_q2.shape == (states.shape[0], 3 * num_repeat, 1), f"cat_q2 instead has shape: {cat_q2.shape}"
-        
 
         cql1_scaled_loss = ((torch.logsumexp(cat_q1 / self.temp, dim=1).mean() * self.cql_weight * self.temp) - q1.mean()) * self.cql_weight
         cql2_scaled_loss = ((torch.logsumexp(cat_q2 / self.temp, dim=1).mean() * self.cql_weight * self.temp) - q2.mean()) * self.cql_weight
         
-        cql_alpha_loss = torch.FloatTensor([0.0])
-        cql_alpha = torch.FloatTensor([0.0])
-        if self.with_lagrange:
-            cql_alpha = torch.clamp(self.cql_log_alpha.exp(), min=0.0, max=1000000.0).to(self.device)
-            cql1_scaled_loss = cql_alpha * (cql1_scaled_loss - self.target_action_gap)
-            cql2_scaled_loss = cql_alpha * (cql2_scaled_loss - self.target_action_gap)
+        # cql_alpha_loss = torch.FloatTensor([0.0])
+        cql_alpha_loss = 0
+        cql_alpha = 0.0
+        # cql_alpha = torch.FloatTensor([0.0])
+        # if self.with_lagrange:
+        #     cql_alpha = torch.clamp(self.cql_log_alpha.exp(), min=0.0, max=1000000.0).to(self.device)
+        #     cql1_scaled_loss = cql_alpha * (cql1_scaled_loss - self.target_action_gap)
+        #     cql2_scaled_loss = cql_alpha * (cql2_scaled_loss - self.target_action_gap)
 
-            self.cql_alpha_optimizer.zero_grad()
-            cql_alpha_loss = (- cql1_scaled_loss - cql2_scaled_loss) * 0.5 
-            cql_alpha_loss.backward(retain_graph=True)
-            self.cql_alpha_optimizer.step()
+        #     self.cql_alpha_optimizer.zero_grad()
+        #     cql_alpha_loss = (- cql1_scaled_loss - cql2_scaled_loss) * 0.5
+        #     cql_alpha_loss.backward(retain_graph=True)
+        #     self.cql_alpha_optimizer.step()
         
         total_c1_loss = critic1_loss + cql1_scaled_loss
         total_c2_loss = critic2_loss + cql2_scaled_loss
@@ -228,7 +232,9 @@ class CQLSAC(nn.Module):
         self.soft_update(self.critic1, self.critic1_target)
         self.soft_update(self.critic2, self.critic2_target)
         
-        return actor_loss.item(), alpha_loss.item(), critic1_loss.item(), critic2_loss.item(), cql1_scaled_loss.item(), cql2_scaled_loss.item(), current_alpha, cql_alpha_loss.item(), cql_alpha.item()
+        return actor_loss.item(), alpha_loss, critic1_loss.item(), critic2_loss.item(), \
+                cql1_scaled_loss.item(), cql2_scaled_loss.item(), current_alpha, cql_alpha_loss, \
+                cql_alpha
 
     def soft_update(self, local_model , target_model):
         """Soft update model parameters.
