@@ -9,12 +9,11 @@ from utils import save
 import random
 from agent import CQLSAC
 from torch.utils.data import DataLoader, TensorDataset
-import minari
 import pandas as pd
 import ast
 from pendulum import PendulumEnv
-from matplotlib import pyplot as plt
 import os
+from utils import save, evaluate
 
 def get_config():
     parser = argparse.ArgumentParser(description='RL')
