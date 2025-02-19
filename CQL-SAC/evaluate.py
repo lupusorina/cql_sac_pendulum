@@ -1,12 +1,8 @@
 import gymnasium as gym
 import numpy as np
-from collections import deque
 import torch
-import wandb
 import argparse
-from buffer import ReplayBuffer
-import glob
-from utils import save, collect_random, evaluate
+from utils import evaluate
 import random
 from agent import CQLSAC
 
@@ -54,10 +50,8 @@ agent = CQLSAC(state_size=env.observation_space.shape[0],
                 target_action_gap=config.target_action_gap,
                 device=device)
 
-# load the model
 FOLDER_MODELS = 'trained_models'
-MODEL_NAME = 'CQL-SACCQL-DQN0'
-
+MODEL_NAME = 'CQL-SAC-OFFLINE_Pendulum0'
 
 state_dict = torch.load(f'{FOLDER_MODELS}/{MODEL_NAME}.pth', map_location=device)
 agent.actor_local.load_state_dict(state_dict)
