@@ -42,7 +42,7 @@ def prep_dataloader(env_id=None, batch_size=256, seed=1):
     EXTRACT_DATA = False
     df = pd.read_csv(f'{DATASET_FOLDER}/{FILENAME}')
 
-    if EXTRACT_DATA == True:
+    if EXTRACT_DATA == True: # This needs to be run once to extract the data from the csv file.
         observation_list = []
         action_list = []
         for item in df['states']:
