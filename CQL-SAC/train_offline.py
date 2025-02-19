@@ -19,7 +19,7 @@ def get_config():
     parser = argparse.ArgumentParser(description='RL')
     parser.add_argument("--run_name", type=str, default="CQL-SAC-OFFLINE", help="Run name, default: CQL-SAC-OFFLINE")
     parser.add_argument("--env", type=str, default="Pendulum-v1", help="Gym environment name, default: Pendulum-v1")
-    parser.add_argument("--episodes", type=int, default=40, help="Number of episodes, default: 40")
+    parser.add_argument("--episodes", type=int, default=100, help="Number of episodes, default: 100")
     parser.add_argument("--seed", type=int, default=1, help="Seed, default: 1")
     parser.add_argument("--save_every", type=int, default=10, help="Saves the network every x epochs, default: 10")
     parser.add_argument("--batch_size", type=int, default=500, help="Batch size, default: 500")
@@ -147,20 +147,22 @@ def train(config):
 
             eval_reward, durations = evaluate(env, agent, episode_nb=i, episode_duration=config.eval_run_duration, plots_folder=PLOTS_FOLDER)
             wandb.log({"Test Reward": eval_reward, "Episode": i, "Batches": batches}, step=batches)
+            average10.append(eval_reward)
+            print("Episode: {} | Reward: {} | Policy Loss: {} | Batches: {}".format(i, eval_reward, policy_loss, batches,))
+
             # Do early stopping if 3 durations in a row are below eval_run_duration
             if all([duration < config.eval_run_duration for duration in durations]):
                 counter_durations_under_threshold += 1
                 print('Counter:', counter_durations_under_threshold)
+                if counter_durations_under_threshold >= 3:
+                    print('Counter reached 3')
+                    save(config, save_name="_Pendulum", model=agent.actor_local, wandb=wandb, ep=i)
+                    break
             else:
-                print('Reset counter')
                 counter_durations_under_threshold = 0
 
-            average10.append(eval_reward)
-            print("Episode: {} | Reward: {} | Policy Loss: {} | Batches: {}".format(i, eval_reward, policy_loss, batches,))
-
-            if i % config.save_every == 0 or counter_durations_under_threshold >= 3:
+            if i % config.save_every == 0:
                 save(config, save_name="_Pendulum", model=agent.actor_local, wandb=wandb, ep=i)
-                break
 
 PLOTS_FOLDER = 'plots'
 if not os.path.exists(PLOTS_FOLDER):
