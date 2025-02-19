@@ -11,7 +11,6 @@ from agent import CQLSAC
 from torch.utils.data import DataLoader, TensorDataset
 import pandas as pd
 import ast
-from pendulum import PendulumEnv
 import os
 from utils import save, evaluate
 
